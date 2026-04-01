@@ -204,7 +204,7 @@ class tJExchangeRule_(MetropolisRule):
           n, x, neg_inf_mask, params, rng, sampler = val
           n += 1
           probs = apply_machine(params, x).real
-          neg_inf_mask = jnp.isneginf(probs) | (jnp.abs(probs) >= 30) | jnp.isnan(probs)
+          neg_inf_mask = jnp.isneginf(probs) | jnp.isnan(probs)
           num_trues = jnp.sum(neg_inf_mask)
           jax.debug.print("Number of inf values: {num}", num=(num_trues, jnp.sum(jnp.isnan(probs))))
 
@@ -227,7 +227,7 @@ class tJExchangeRule_(MetropolisRule):
       jax.debug.print("do={d}", d=double_occupancy(x))
       probs = apply_machine(params, x).real
       jax.debug.print("inital probs={z}",z=(probs, jnp.max(probs), jnp.min(probs)))
-      neg_inf_mask = jnp.isneginf(probs) | (jnp.abs(probs) >= 30)
+      neg_inf_mask = jnp.isneginf(probs) | jnp.isnan(probs)
       neg_inf_mask = jnp.repeat(jnp.expand_dims(neg_inf_mask, 1), x.shape[1], 1)
       initial_val = (0, x, neg_inf_mask, params, rng, sampler)
 
@@ -259,7 +259,9 @@ class tJExchangeRule_(MetropolisRule):
 
     def random_state_(self, sampler, rng):
         #random sample with single occupancy
-        batch_size = sampler.n_batches//6
+        #print("batchsize", sampler.n_batches)
+        batch_size = sampler.n_batches
+        #print("new_batchsize", batch_size)
         keys = jax.random.split(rng, batch_size)
         indices = jax.vmap(lambda key: jax.random.permutation(key, jnp.arange(sampler.hilbert.n_orbitals)))(keys)
         n_r = sampler.hilbert.n_fermions_per_spin[0]
@@ -278,14 +280,13 @@ class tJExchangeRule_(MetropolisRule):
         states = states.at[(rows, g_ind.T)].set(1)
         #insert blue spins
         states = states.at[(rows, b_ind.T)].set(1)
-        
         state_r = states[:, :sampler.hilbert.size//3]
         state_g = states[:, sampler.hilbert.size//3:2*sampler.hilbert.size//3]
         state_b = states[:, 2*sampler.hilbert.size//3:]
         print(state_b.shape, state_r.shape)
         parts = [state_r, state_g, state_b]
         all_permutations = []
-        print("state shape", states.shape, "dtype", states.dtype)
+        print("state shape", states.shape)
         
         for perm in permutations(parts):
             permuted_state = jnp.concatenate(perm, axis=1)
@@ -293,10 +294,9 @@ class tJExchangeRule_(MetropolisRule):
             all_permutations.append(permuted_state)
         
         # Combine all permutations into a single array
-        all_states = jnp.concatenate(all_permutations, axis=0, dtype=jnp.int8)
+        all_states = jnp.concatenate(all_permutations, axis=0)
         print(all_states.shape)
-        return all_states
-
+        return states
 
         #return jnp.concatenate([states, states_flipped_12, states_flipped_23, states_flipped_31], axis=0)
         
